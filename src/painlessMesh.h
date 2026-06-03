@@ -1,8 +1,7 @@
 #ifndef _EASY_MESH_H_
 #define _EASY_MESH_H_
 
-#define _TASK_PRIORITY  // Support for layered scheduling priority
-#define _TASK_STD_FUNCTION
+#include "painlessTaskOptions.h"
 
 #include <Arduino.h>
 #include <functional>
@@ -18,7 +17,6 @@
 #endif  // ESP32
 
 #ifdef PAINLESSMESH_ENABLE_ARDUINO_WIFI
-#include "painlessMeshConnection.h"
 #include "painlessMeshSTA.h"
 
 #include "arduino/wifi.hpp"
@@ -39,12 +37,6 @@
 #include "painlessmesh/tcp.hpp"
 using namespace painlessmesh::logger;
 
-#define MIN_FREE_MEMORY \
-  4000  // Minimum free memory, besides here all packets in queue are discarded.
-#define MAX_MESSAGE_QUEUE \
-  50  // MAX number of unsent messages in queue. Newer messages are discarded
-#define MAX_CONSECUTIVE_SEND 5  // Max message burst
-
 /*! \mainpage painlessMesh: A painless way to setup a mesh.
  *
  * painlessMesh is designed in a modular way, with many parent classes. The best
@@ -56,8 +48,7 @@ using namespace painlessmesh::logger;
  */
 
 #ifndef PAINLESSMESH_ENABLE_ARDUINO_WIFI
-class MeshConnection;
-using painlessMesh = painlessmesh::Mesh<MeshConnection>;
+using painlessMesh = painlessmesh::Mesh<Connection>;
 #endif
 
 #endif  //   _EASY_MESH_H_

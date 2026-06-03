@@ -12,9 +12,11 @@
 #include <SPIFFS.h>
 #include <Update.h>
 #else
-#include <FS.h>
+#include <LittleFS.h>
 #endif
 #endif
+
+
 
 namespace painlessmesh {
 namespace plugin {
@@ -265,8 +267,43 @@ class State : public protocol::PackageInterface {
   std::shared_ptr<Task> task;
 };
 
+typedef std::function<size_t(painlessmesh::plugin::ota::DataRequest, char* buffer)> otaDataPacketCallbackType_t;
+
 template <class T>
-void addPackageCallback(Scheduler& scheduler, plugin::PackageHandler<T>& mesh,
+void addSendPackageCallback(Scheduler& scheduler, plugin::PackageHandler<T>& mesh,
+                        otaDataPacketCallbackType_t callback,size_t otaPartSize){
+    using namespace logger;
+    #if defined(ESP32) || defined(ESP8266)
+
+    mesh.onPackage(11,[&mesh,callback,otaPartSize](painlessmesh::protocol::Variant variant){
+      
+      auto pkg = variant.to<painlessmesh::plugin::ota::DataRequest>();
+      char buffer[otaPartSize+1];
+      memset(buffer, 0,otaPartSize+1);
+      auto size = callback(pkg,buffer);
+      // Handle zero size
+      if(!size){
+        // No data is available by the user app. 
+
+        // todo - doubtful, shall we return true or false. What is the purpose of this return value.  
+        return true;
+      }
+      //Encode data as base64 so there are no null characters and can be shown in plaintext
+      auto b64Data = painlessmesh::base64::encode((unsigned char * )buffer,size);
+      auto reply =
+              painlessmesh::plugin::ota::Data::replyTo(pkg,
+                                b64Data,
+                                 pkg.partNo);
+      mesh.sendPackage(&reply);
+      return true;
+    });
+
+    #endif
+}
+
+
+template <class T>
+void addReceivePackageCallback(Scheduler& scheduler, plugin::PackageHandler<T>& mesh,
                         TSTRING role = "") {
   using namespace logger;
 #if defined(ESP32) || defined(ESP8266)
@@ -276,11 +313,13 @@ void addPackageCallback(Scheduler& scheduler, plugin::PackageHandler<T>& mesh,
   updateFW->role = role;
 #ifdef ESP32
   SPIFFS.begin(true);  // Start the SPI Flash Files System
-#else
-  SPIFFS.begin();  // Start the SPI Flash Files System
-#endif
   if (SPIFFS.exists(currentFW->ota_fn)) {
-    auto file = SPIFFS.open(currentFW->ota_fn, "r");
+  auto file = SPIFFS.open(currentFW->ota_fn, "r");
+#else
+  LittleFS.begin();  // Start the SPI Flash Files System
+  if (LittleFS.exists(currentFW->ota_fn)) {
+  auto file = LittleFS.open(currentFW->ota_fn, "r");
+#endif
     TSTRING msg = "";
     while (file.available()) {
       msg += (char)file.read();
@@ -319,10 +358,10 @@ void addPackageCallback(Scheduler& scheduler, plugin::PackageHandler<T>& mesh,
     return false;
   });
 
-  mesh.onPackage(11, [currentFW](protocol::Variant variant) {
-    Log(ERROR, "Data request should not be send to this node\n");
-    return false;
-  });
+  // mesh.onPackage(11, [currentFW](protocol::Variant variant) {
+  //   Log(ERROR, "Data request should not be send to this node\n");
+  //   return false;
+  // });
 
   mesh.onPackage(12, [currentFW, updateFW, &mesh,
                       &scheduler](protocol::Variant variant) {
@@ -368,7 +407,18 @@ void addPackageCallback(Scheduler& scheduler, plugin::PackageHandler<T>& mesh,
         //       check md5, reboot
         if (Update.end(true)) {  // true to set the size to the
                                  // current progress
+        #ifdef ESP32                   
           auto file = SPIFFS.open(updateFW->ota_fn, "w");
+          if (!file) {
+            Log(ERROR, "handleOTA(): Unable to write md5 of new update to the SPIFFS file. This will result in endless update loops for OTA\n");
+          }
+        #else
+          auto file = LittleFS.open(updateFW->ota_fn, "w");
+          if (!file) {
+            Log(ERROR, "handleOTA(): Unable to write md5 of new binary to the LittleFS file. This will result in endless update loops for OTA\n");
+          }
+        #endif
+
           String msg;
           auto var = protocol::Variant(updateFW.get());
           var.printTo(msg);
@@ -392,7 +442,7 @@ void addPackageCallback(Scheduler& scheduler, plugin::PackageHandler<T>& mesh,
         auto request = DataRequest::replyTo(pkg, updateFW->partNo);
         updateFW->task->setCallback(
             [request, &mesh]() { mesh.sendPackage(&request); });
-        updateFW->task->disable();
+        //updateFW->task->disable();
         updateFW->task->restart();
       }
     }

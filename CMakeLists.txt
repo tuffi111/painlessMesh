@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required (VERSION 3.5)
 project (painlessMesh)
 
 set(CMAKE_CXX_STANDARD 14)
@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-FIND_PACKAGE(Boost 1.42.0 REQUIRED COMPONENTS system)
+FIND_PACKAGE(Boost CONFIG REQUIRED COMPONENTS system)
 IF(Boost_FOUND)
   INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
   LINK_DIRECTORIES(${Boost_LIBRARY_DIRS})
@@ -21,6 +21,10 @@ endforeach()
 
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
-add_executable(catch_tcp_integration test/boost/tcp_integration.cpp test/catch/fake_serial.cpp src/painlessMeshConnection.cpp src/scheduler.cpp)
+add_executable(catch_tcp_integration test/boost/tcp_integration.cpp test/catch/fake_serial.cpp src/scheduler.cpp)
 target_include_directories(catch_tcp_integration PUBLIC test/include/ test/boost/ test/ArduinoJson/src/ test/TaskScheduler/src/ src/)
 TARGET_LINK_LIBRARIES(catch_tcp_integration ${Boost_LIBRARIES})
+
+add_executable(catch_connection test/boost/connection.cpp test/catch/fake_serial.cpp src/scheduler.cpp)
+target_include_directories(catch_connection PUBLIC test/include/ test/boost/ test/ArduinoJson/src/ test/TaskScheduler/src/ src/)
+TARGET_LINK_LIBRARIES(catch_connection ${Boost_LIBRARIES})
