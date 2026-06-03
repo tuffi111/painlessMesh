@@ -13,6 +13,24 @@
 #include <ArduinoJson.h>
 #undef ARDUINOJSON_ENABLE_STD_STRING
 
+// Local patch (esp/ build): painlessMesh still uses ArduinoJson's deprecated
+// JSON_*_SIZE macros, which expand to `_Pragma("GCC warning ...")` — an
+// unconditional warning no -W flag can silence. Redefine them to the same
+// underlying expressions WITHOUT the pragma. Behaviour is identical; only the
+// compile-time noise is removed. Remove if painlessMesh stops using these macros.
+#ifdef JSON_OBJECT_SIZE
+#undef JSON_OBJECT_SIZE
+#define JSON_OBJECT_SIZE(N) (ArduinoJson::detail::sizeofObject(N))
+#endif
+#ifdef JSON_ARRAY_SIZE
+#undef JSON_ARRAY_SIZE
+#define JSON_ARRAY_SIZE(N) (ArduinoJson::detail::sizeofArray(N))
+#endif
+#ifdef JSON_STRING_SIZE
+#undef JSON_STRING_SIZE
+#define JSON_STRING_SIZE(N) ((N) + 1)
+#endif
+
 // Enable (arduino) wifi support
 #define PAINLESSMESH_ENABLE_ARDUINO_WIFI
 
