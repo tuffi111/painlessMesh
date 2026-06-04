@@ -12,6 +12,10 @@
 #include "painlessmesh/router.hpp"
 #include "painlessmesh/tcp.hpp"
 
+#if defined(ESP32)
+#include <esp_mac.h>  // esp_read_mac(), ESP_MAC_WIFI_SOFTAP — nodeId fallback in init()
+#endif
+
 extern painlessmesh::logger::LogClass Log;
 
 namespace painlessmesh {
@@ -72,6 +76,20 @@ class Mesh : public painlessmesh::Mesh<Connection> {
       Log(ERROR, "init(): WiFi.softAPmacAddress(MAC) failed.\n");
     }
     uint32_t nodeId = tcp::encodeNodeId(MAC);
+#if defined(ESP32)
+    // WiFi.softAPmacAddress() can read back all-zeros this early in boot (esp_wifi
+    // not fully up), yielding nodeId 0. A 0 nodeId leaves the node without a routing
+    // identity, so the mesh handshake drops every connection right after it opens.
+    // Fall back to the eFuse SoftAP MAC, which is always readable and independent of
+    // init order, applying the same bytes-2..5 big-endian scheme encodeNodeId() uses.
+    if (nodeId == 0) {
+      uint8_t efuseMac[6] = {0};
+      if (esp_read_mac(efuseMac, ESP_MAC_WIFI_SOFTAP) == ESP_OK) {
+        nodeId = tcp::encodeNodeId(efuseMac);
+        Log(STARTUP, "init(): nodeId recovered from eFuse SoftAP MAC: %u\n", nodeId);
+      }
+    }
+#endif
     if (nodeId == 0) Log(ERROR, "NodeId set to 0\n");
 
     this->init(nodeId);
